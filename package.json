@@ -1,0 +1,27 @@
+{
+  "name": "iso-audit-platform",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ISO 27001 болон мэдээллийн аюулгүй байдлын аудитыг системчлэх SaaS платформ",
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@9.1.0",
+  "scripts": {
+    "dev": "pnpm --parallel --filter \"@audit/api\" --filter \"@audit/web\" dev",
+    "dev:api": "pnpm --filter @audit/api dev",
+    "dev:web": "pnpm --filter @audit/web dev",
+    "build": "pnpm --filter @audit/shared build && pnpm --filter @audit/database build && pnpm --filter @audit/api build && pnpm --filter @audit/web build",
+    "db:generate": "pnpm --filter @audit/database generate",
+    "db:migrate": "pnpm --filter @audit/database migrate",
+    "db:seed": "pnpm --filter @audit/database seed",
+    "db:studio": "pnpm --filter @audit/database studio",
+    "lint": "pnpm -r lint",
+    "infra:up": "docker compose up -d",
+    "infra:down": "docker compose down"
+  },
+  "devDependencies": {
+    "prettier": "^3.3.3",
+    "typescript": "^5.5.4"
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "commonjs",
+    "declaration": false,
+    "removeComments": true,
+    "allowSyntheticDefaultImports": true,
+    "target": "ES2022",
+    "outDir": "./dist",
+    "baseUrl": "./",
+    "incremental": true,
+    "strictNullChecks": true,
+    "noImplicitAny": true,
+    "strictBindCallApply": true,
+    "forceConsistentCasingInFileNames": true,
+    "noFallthroughCasesInSwitch": true,
+    "rootDir": "./src",
+    // @audit/* нь node_modules (pnpm symlink) дахь build хийсэн dist-ээс resolve хийгдэнэ.
+    // Тиймээс api-г build/ажиллуулахаас өмнө @audit/shared, @audit/database-ийг build хийсэн байх ёстой.
+    "paths": {}
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist", "test"]
+}
