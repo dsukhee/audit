@@ -1,0 +1,21 @@
+{
+  "name": "@audit/database",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Prisma database layer for ISO 27001 Audit Platform",
+  "main": "./src/index.ts",
+  "scripts": {
+    "generate": "prisma generate",
+    "migrate": "prisma migrate dev",
+    "studio": "prisma studio",
+    "push": "prisma db push",
+    "seed": "tsx prisma/seed.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0"
+  },
+  "devDependencies": {
+    "prisma": "^5.22.0",
+    "tsx": "^4.19.0"
+  }
+}
