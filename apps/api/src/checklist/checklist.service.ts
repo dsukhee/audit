@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { ChecklistResult } from '@audit/database';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditsService } from '../audits/audits.service';
+import { NonconformitiesService } from '../nonconformities/nonconformities.service';
 import { AuthUser } from '../auth/decorators/current-user.decorator';
 import { UpsertResponseDto } from './dto/upsert-response.dto';
 
@@ -10,6 +11,7 @@ export class ChecklistService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditsService: AuditsService,
+    private readonly nonconformities: NonconformitiesService,
   ) {}
 
   /**
@@ -53,7 +55,7 @@ export class ChecklistService {
       throw new BadRequestException('Хяналт энэ аудитын стандартад хамаарахгүй байна.');
     }
 
-    return this.prisma.checklistResponse.upsert({
+    const response = await this.prisma.checklistResponse.upsert({
       where: { auditId_controlId: { auditId, controlId } },
       update: {
         result: dto.result ?? null,
@@ -70,6 +72,14 @@ export class ChecklistService {
         respondedAt: new Date(),
       },
     });
+
+    // Үр дүн нь үл тохирол (Major/Minor/Observation) бол NC-г автоматаар үүсгэнэ (идемпотент)
+    let nonconformity = null;
+    if (response.result) {
+      nonconformity = await this.nonconformities.createFromChecklistResponse(response.id, user);
+    }
+
+    return { response, nonconformity };
   }
 
   private summarize(
