@@ -5,9 +5,11 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { getAudit, updateAudit, type Audit } from '@/lib/api';
 import { AppShell } from '@/components/app-shell';
+import { AiTab } from '@/components/ai-tab';
 import { ChecklistTab } from '@/components/checklist-tab';
 import { EvidenceTab } from '@/components/evidence-tab';
 import { NonconformityTab } from '@/components/nonconformity-tab';
+import { ReportsTab } from '@/components/reports-tab';
 import { RiskTab } from '@/components/risk-tab';
 
 const STATUSES = [
@@ -21,7 +23,7 @@ const STATUSES = [
   'CANCELLED',
 ];
 
-type Tab = 'info' | 'checklist' | 'evidence' | 'nc' | 'risk';
+type Tab = 'info' | 'checklist' | 'evidence' | 'nc' | 'risk' | 'ai' | 'reports';
 
 export default function AuditDetailPage() {
   const params = useParams();
@@ -58,6 +60,8 @@ export default function AuditDetailPage() {
     { key: 'evidence', label: 'Нотлох баримт' },
     { key: 'nc', label: 'Үл тохирол' },
     { key: 'risk', label: 'Эрсдэл' },
+    { key: 'ai', label: 'AI туслах' },
+    { key: 'reports', label: 'Тайлан' },
   ];
 
   return (
@@ -114,6 +118,8 @@ export default function AuditDetailPage() {
             {tab === 'evidence' && <EvidenceTab auditId={id} />}
             {tab === 'nc' && <NonconformityTab auditId={id} />}
             {tab === 'risk' && <RiskTab auditId={id} />}
+            {tab === 'ai' && <AiTab auditId={id} />}
+            {tab === 'reports' && <ReportsTab auditId={id} />}
           </div>
         </>
       )}

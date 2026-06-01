@@ -327,3 +327,97 @@ export const updateRisk = (id: string, data: Record<string, unknown>) =>
   apiFetch<Risk>(`/risks/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
 export const deleteRisk = (id: string) =>
   apiFetch<{ success: boolean }>(`/risks/${id}`, { method: 'DELETE' });
+
+
+// ============================================================================
+// Phase 4 — AI Assistant / Reports / Dashboard
+// ============================================================================
+
+export interface AiAnalysis {
+  id: string;
+  generatedFinding?: string | null;
+  generatedEvidence?: string | null;
+  generatedRequirement?: string | null;
+  generatedConclusion?: string | null;
+  suggestedCategory?: NcCategoryValue | null;
+  modelProvider?: string | null;
+  modelName?: string | null;
+  createdAt: string;
+  control?: { clause: string; title: string } | null;
+}
+
+export const generateFinding = (
+  auditId: string,
+  data: { controlId: string; answer?: string; evidence?: string; result?: ChecklistResultValue },
+) => apiFetch<AiAnalysis>(`/audits/${auditId}/ai/generate-finding`, { method: 'POST', body: JSON.stringify(data) });
+
+export const getAiAnalyses = (auditId: string) =>
+  apiFetch<AiAnalysis[]>(`/audits/${auditId}/ai`);
+
+export type CountMap = Record<string, number>;
+
+export interface AuditAnalytics {
+  audit: { auditCode: string; organization?: string; standard?: string; status: string; leadAuditor?: string | null };
+  checklist: {
+    totalControls: number;
+    answered: number;
+    unanswered: number;
+    counts: Record<ChecklistResultValue, number>;
+    compliancePercent: number;
+  };
+  nonconformities: { total: number; byCategory: CountMap; byStatus: CountMap };
+  capa: { total: number; byStatus: CountMap };
+  risks: { total: number; byLevel: CountMap };
+}
+
+export interface ReportListItem {
+  id: string;
+  type: string;
+  format: string;
+  title?: string | null;
+  status: string;
+  generatedAt?: string | null;
+}
+
+export interface Report {
+  id: string;
+  type: string;
+  title?: string | null;
+  contentJson: {
+    generatedAt: string;
+    type: string;
+    executiveSummary: AuditAnalytics;
+    detailedFindings: {
+      ncCode: string;
+      category: string;
+      clause?: string | null;
+      finding: string;
+      evidence?: string | null;
+      impact?: string | null;
+      recommendation?: string | null;
+      status: string;
+      correctiveActions: { action: string; status: string; ownerLabel?: string | null }[];
+    }[];
+  };
+}
+
+export interface DashboardData {
+  totalAudits: number;
+  auditsByStatus: CountMap;
+  nonconformities: { total: number; byCategory: CountMap };
+  capa: { byStatus: CountMap };
+  risks: { total: number; byLevel: CountMap };
+}
+
+export const getAuditAnalytics = (auditId: string) =>
+  apiFetch<AuditAnalytics>(`/audits/${auditId}/analytics`);
+export const listReports = (auditId: string) =>
+  apiFetch<ReportListItem[]>(`/audits/${auditId}/reports`);
+export const generateReport = (auditId: string, type: string, format = 'PDF') =>
+  apiFetch<ReportListItem>(`/audits/${auditId}/reports`, {
+    method: 'POST',
+    body: JSON.stringify({ type, format }),
+  });
+export const getReport = (id: string) => apiFetch<Report>(`/reports/${id}`);
+
+export const getDashboard = () => apiFetch<DashboardData>('/dashboard');
