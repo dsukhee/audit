@@ -4,10 +4,15 @@
   "private": true,
   "description": "ISO 27001 Audit Platform",
   "scripts": {
+    "dev": "npm run dev --workspace=packages/api & npm run dev --workspace=packages/web",
+    "dev:api": "npm run dev --workspace=packages/api",
+    "dev:web": "npm run dev --workspace=packages/web",
+    "build": "npm run build --workspace=packages/api && npm run build --workspace=packages/web",
     "db:generate": "npm run generate --workspace=packages/database",
     "db:migrate": "npm run migrate --workspace=packages/database",
+    "db:push": "npm run push --workspace=packages/database",
     "db:studio": "npm run studio --workspace=packages/database",
-    "db:push": "npm run push --workspace=packages/database"
+    "setup": "npm install && npm run db:generate"
   },
   "workspaces": [
     "packages/*"
