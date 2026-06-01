@@ -1,0 +1,553 @@
+// =============================================================================
+// ISO 27001 Audit Platform — Prisma Schema
+// -----------------------------------------------------------------------------
+// Бүх модулийг хамарсан өгөгдлийн загвар (ER model).
+// Модулиуд: Auth/RBAC, Audit Management, ISO Checklist Engine, Evidence,
+//           Nonconformity (NC), CAPA, Risk (ISO 27005, 5x5), AI Assistant, Reports.
+//
+// Тэмдэглэл:
+//   - Multi-tenancy ХЭРЭГГҮЙ — зөвхөн нэг аудитын фирм ашиглана.
+//     (Organization = аудит хийлгэх client байгууллага)
+//   - Risk matrix = 5 шатлалт (5x5), score = likelihood(1-5) × impact(1-5) → 1..25
+// =============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =============================================================================
+// ENUMS
+// =============================================================================
+
+/// Хэрэглэгчийн түвшин (RBAC)
+enum UserRole {
+  AUDITOR // Аудитор — аудит үүсгэх, чеклист бөглөх, NC бүртгэх, тайлан гаргах
+  ORG_REPRESENTATIVE // Байгууллагын төлөөлөгч — нотлох баримт, CAPA шинэчлэх, тайлан харах
+  ADMIN // Админ — ISO стандарт, хэрэглэгч, загвар тайлан удирдах
+}
+
+/// Аудитын төлөв
+enum AuditStatus {
+  DRAFT
+  PLANNED
+  IN_PROGRESS
+  FIELDWORK_COMPLETE
+  REPORTING
+  COMPLETED
+  CLOSED
+  CANCELLED
+}
+
+/// Аудитын багийн гишүүний үүрэг
+enum AuditTeamRole {
+  LEAD_AUDITOR
+  AUDITOR
+  TECHNICAL_EXPERT
+  OBSERVER
+}
+
+/// Чеклистийн хариултын үр дүн
+enum ChecklistResult {
+  CONFORMITY // Нийцсэн
+  MINOR_NC // Бага зэргийн үл тохирол
+  MAJOR_NC // Ноцтой үл тохирол
+  OBSERVATION // Ажиглалт
+  NOT_APPLICABLE // Хамаарахгүй (N/A)
+}
+
+/// Нотлох баримтын файлын төрөл
+enum EvidenceFileType {
+  PDF
+  DOCX
+  XLSX
+  JPG
+  PNG
+  OTHER
+}
+
+/// Үл тохирлын ангилал
+enum NcCategory {
+  MAJOR
+  MINOR
+  OBSERVATION
+}
+
+/// Үл тохирлын төлөв (амьдралын мөчлөг)
+enum NcStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  VERIFIED
+  CLOSED
+}
+
+/// Залруулах арга хэмжээний (CAPA) төлөв
+enum CapaStatus {
+  OPEN
+  IN_PROGRESS
+  CLOSED
+  VERIFIED
+}
+
+/// Эрсдэлийн магадлал / нөлөөллийн түвшин — 5 шатлалт (ISO 27005, 5x5 matrix)
+///   VERY_LOW=1, LOW=2, MEDIUM=3, HIGH=4, VERY_HIGH=5
+enum RiskFactor {
+  VERY_LOW // 1
+  LOW // 2
+  MEDIUM // 3
+  HIGH // 4
+  VERY_HIGH // 5
+}
+
+/// Тооцоолсон эрсдэлийн нийт түвшин (5 шатлалт)
+/// score = likelihood(1-5) × impact(1-5) → 1..25
+///   1-4   = VERY_LOW
+///   5-9   = LOW
+///   10-14 = MEDIUM
+///   15-19 = HIGH
+///   20-25 = CRITICAL
+enum RiskLevel {
+  VERY_LOW
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+/// Эрсдэл боловсруулах сонголт (ISO 27005)
+enum RiskTreatment {
+  MITIGATE // Бууруулах
+  ACCEPT // Хүлээн зөвшөөрөх
+  TRANSFER // Шилжүүлэх
+  AVOID // Зайлсхийх
+}
+
+/// Эрсдэлийн төлөв
+enum RiskStatus {
+  IDENTIFIED
+  ASSESSED
+  TREATMENT_PLANNED
+  IN_TREATMENT
+  MITIGATED
+  ACCEPTED
+  CLOSED
+}
+
+/// Тайлангийн төрөл
+enum ReportType {
+  EXECUTIVE_SUMMARY
+  DETAILED_FINDINGS
+  FULL_AUDIT_REPORT
+  MANAGEMENT_REPORT
+}
+
+/// Тайлангийн формат
+enum ReportFormat {
+  DOCX
+  PDF
+}
+
+/// Тайлангийн төлөв
+enum ReportStatus {
+  DRAFT
+  GENERATED
+  FINALIZED
+}
+
+/// AI шинжилгээний төрөл
+enum AiAnalysisType {
+  FINDING_GENERATION // Finding автоматаар бичих
+  CONTROL_ASSESSMENT // Хяналтын үнэлгээ санал болгох
+  RISK_SUGGESTION // Эрсдэлийн санал
+  REPORT_DRAFT // Тайлангийн ноорог
+}
+
+// =============================================================================
+// AUTH / RBAC
+// =============================================================================
+
+/// Аудит хийлгэж буй байгууллага (client) — жишээ: XYZ LLC
+model Organization {
+  id             String   @id @default(cuid())
+  name           String
+  registrationNo String?
+  industry       String?
+  address        String?
+  contactEmail   String?
+  contactPhone   String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  users  User[]
+  audits Audit[]
+  risks  Risk[]
+}
+
+/// Платформын хэрэглэгч (Аудитор / Байгууллагын төлөөлөгч / Админ)
+model User {
+  id             String        @id @default(cuid())
+  email          String        @unique
+  passwordHash   String
+  firstName      String
+  lastName       String
+  role           UserRole      @default(AUDITOR)
+  phone          String?
+  isActive       Boolean       @default(true)
+  organizationId String? // ORG_REPRESENTATIVE-д хамаарна
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  // Холбоосууд
+  leadAudits           Audit[]             @relation("LeadAuditor")
+  auditTeamMemberships AuditTeamMember[]
+  checklistResponses   ChecklistResponse[]
+  uploadedEvidence     Evidence[]
+  reportedNCs          Nonconformity[]     @relation("NcReportedBy")
+  ownedActions         CorrectiveAction[]  @relation("CapaOwner")
+  verifiedActions      CorrectiveAction[]  @relation("CapaVerifiedBy")
+  ownedRisks           Risk[]              @relation("RiskOwner")
+  generatedReports     Report[]
+  aiAnalyses           AiAnalysis[]
+  auditLogs            AuditLog[]
+}
+
+// =============================================================================
+// ISO STANDARDS & CONTROLS (Checklist Engine-ийн суурь)
+// =============================================================================
+
+/// ISO стандарт — жишээ: ISO 27001:2022 (өргөтгөх: 9001, 22301, 45001, 14001)
+model Standard {
+  id          String   @id @default(cuid())
+  code        String   @unique // "ISO 27001:2022"
+  name        String // "Information Security Management Systems"
+  version     String? // "2022"
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  controls Control[]
+  audits   Audit[]
+}
+
+/// Хяналт / заалт — жишээ: A.5 Information Security Policies, эсвэл clause 6.1.2
+/// Иерархи бүтэцтэй (parent/child) — бүлэг доторх дэд хяналтуудыг илэрхийлнэ.
+model Control {
+  id          String   @id @default(cuid())
+  standardId  String
+  standard    Standard @relation(fields: [standardId], references: [id], onDelete: Cascade)
+  clause      String // "A.5.1" эсвэл "6.1.2"
+  title       String // "Information Security Policies"
+  description String? // шаардлагын текст
+  question    String? // чеклистийн асуулт
+  category    String? // бүлэг — "Organizational Controls"
+  sortOrder   Int      @default(0)
+
+  // Иерархи
+  parentId String?
+  parent   Control?  @relation("ControlHierarchy", fields: [parentId], references: [id])
+  children Control[] @relation("ControlHierarchy")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  checklistResponses ChecklistResponse[]
+  nonconformities    Nonconformity[]
+  evidence           Evidence[]
+  aiAnalyses         AiAnalysis[]
+
+  @@unique([standardId, clause])
+}
+
+// =============================================================================
+// AUDIT MANAGEMENT
+// =============================================================================
+
+/// Аудит — жишээ: AUD-2026-001
+model Audit {
+  id               String       @id @default(cuid())
+  auditCode        String       @unique // "AUD-2026-001"
+  title            String?
+  organizationId   String
+  organization     Organization @relation(fields: [organizationId], references: [id])
+  standardId       String
+  standard         Standard     @relation(fields: [standardId], references: [id])
+  leadAuditorId    String
+  leadAuditor      User         @relation("LeadAuditor", fields: [leadAuditorId], references: [id])
+  scope            String? // Audit Scope
+  objectives       String?
+  status           AuditStatus  @default(DRAFT)
+  plannedStartDate DateTime?
+  plannedEndDate   DateTime?
+  actualStartDate  DateTime?
+  actualEndDate    DateTime?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  teamMembers        AuditTeamMember[]
+  checklistResponses ChecklistResponse[]
+  evidence           Evidence[]
+  nonconformities    Nonconformity[]
+  risks              Risk[]
+  reports            Report[]
+  aiAnalyses         AiAnalysis[]
+}
+
+/// Аудитын багийн гишүүн (Audit Team)
+model AuditTeamMember {
+  id         String        @id @default(cuid())
+  auditId    String
+  audit      Audit         @relation(fields: [auditId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User          @relation(fields: [userId], references: [id])
+  teamRole   AuditTeamRole @default(AUDITOR)
+  assignedAt DateTime      @default(now())
+
+  @@unique([auditId, userId])
+}
+
+// =============================================================================
+// CHECKLIST ENGINE
+// =============================================================================
+
+/// Аудит дахь хяналт тус бүрийн хариулт (нэг audit × нэг control)
+model ChecklistResponse {
+  id            String           @id @default(cuid())
+  auditId       String
+  audit         Audit            @relation(fields: [auditId], references: [id], onDelete: Cascade)
+  controlId     String
+  control       Control          @relation(fields: [controlId], references: [id])
+  result        ChecklistResult? // null = хараахан үнэлээгүй
+  comment       String?
+  respondedById String?
+  respondedBy   User?            @relation(fields: [respondedById], references: [id])
+  respondedAt   DateTime?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  evidence        Evidence[]
+  nonconformities Nonconformity[]
+
+  @@unique([auditId, controlId])
+}
+
+// =============================================================================
+// EVIDENCE MANAGEMENT
+// =============================================================================
+
+/// Нотлох баримт — файл (S3/MinIO-д storageKey-ээр хадгална)
+model Evidence {
+  id                  String             @id @default(cuid())
+  auditId             String
+  audit               Audit              @relation(fields: [auditId], references: [id], onDelete: Cascade)
+  controlId           String?
+  control             Control?           @relation(fields: [controlId], references: [id])
+  checklistResponseId String?
+  checklistResponse   ChecklistResponse? @relation(fields: [checklistResponseId], references: [id])
+  nonconformityId     String?
+  nonconformity       Nonconformity?     @relation(fields: [nonconformityId], references: [id])
+  fileName            String // "ISMS Policy.pdf"
+  fileType            EvidenceFileType
+  mimeType            String?
+  fileSize            Int? // bytes
+  storageKey          String // S3/MinIO object key
+  description         String?
+  uploadedById        String?
+  uploadedBy          User?              @relation(fields: [uploadedById], references: [id])
+  uploadedAt          DateTime           @default(now())
+}
+
+// =============================================================================
+// NONCONFORMITY (NC)
+// =============================================================================
+
+/// Үл тохирол — жишээ: NC-001
+model Nonconformity {
+  id                  String             @id @default(cuid())
+  ncCode              String             @unique // "NC-001"
+  auditId             String
+  audit               Audit              @relation(fields: [auditId], references: [id], onDelete: Cascade)
+  controlId           String?
+  control             Control?           @relation(fields: [controlId], references: [id])
+  checklistResponseId String?
+  checklistResponse   ChecklistResponse? @relation(fields: [checklistResponseId], references: [id])
+  clause              String? // "6.1.2"
+  category            NcCategory
+  finding             String // Тогтоосон зөрчил
+  evidenceSummary     String?
+  impact              String?
+  recommendation      String?
+  status              NcStatus           @default(OPEN)
+  reportedById        String?
+  reportedBy          User?              @relation("NcReportedBy", fields: [reportedById], references: [id])
+  identifiedAt        DateTime           @default(now())
+  dueDate             DateTime?
+  closedAt            DateTime?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  correctiveActions CorrectiveAction[]
+  evidence          Evidence[]
+  aiAnalyses        AiAnalysis[]
+}
+
+// =============================================================================
+// CORRECTIVE ACTION (CAPA)
+// =============================================================================
+
+/// Залруулах арга хэмжээ — нэг NC-д нэг буюу хэд хэдэн арга хэмжээ
+model CorrectiveAction {
+  id               String        @id @default(cuid())
+  capaCode         String?       @unique // "CAPA-001"
+  nonconformityId  String
+  nonconformity    Nonconformity @relation(fields: [nonconformityId], references: [id], onDelete: Cascade)
+  action           String // "Risk Register шинэчлэх"
+  rootCause        String?
+  ownerId          String?
+  owner            User?         @relation("CapaOwner", fields: [ownerId], references: [id])
+  ownerLabel       String? // чөлөөт текст эзэмшигч — "IT Manager"
+  status           CapaStatus    @default(OPEN)
+  dueDate          DateTime?
+  completedAt      DateTime?
+  verifiedById     String?
+  verifiedBy       User?         @relation("CapaVerifiedBy", fields: [verifiedById], references: [id])
+  verifiedAt       DateTime?
+  verificationNote String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+}
+
+// =============================================================================
+// RISK ASSESSMENT (ISO 27005 — 5x5 matrix)
+// =============================================================================
+
+/// Эрсдэлийн үнэлгээ — likelihood × impact матрицаар (5x5) түвшин тооцно
+/// riskScore = likelihood(1-5) × impact(1-5) → 1..25
+/// riskLevel: 1-4=VERY_LOW, 5-9=LOW, 10-14=MEDIUM, 15-19=HIGH, 20-25=CRITICAL
+model Risk {
+  id             String         @id @default(cuid())
+  riskCode       String?        @unique // "RISK-001"
+  auditId        String?
+  audit          Audit?         @relation(fields: [auditId], references: [id])
+  organizationId String?
+  organization   Organization?  @relation(fields: [organizationId], references: [id])
+  title          String
+  description    String?
+  asset          String?
+  threat         String?
+  vulnerability  String?
+  likelihood     RiskFactor // 5 шатлалт
+  impact         RiskFactor // 5 шатлалт
+  riskScore      Int // likelihood × impact (1..25)
+  riskLevel      RiskLevel // 5 шатлалт
+  treatment      RiskTreatment?
+  treatmentPlan  String?
+  ownerId        String?
+  owner          User?          @relation("RiskOwner", fields: [ownerId], references: [id])
+  status         RiskStatus     @default(IDENTIFIED)
+  reviewDate     DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+}
+
+// =============================================================================
+// AI AUDIT ASSISTANT
+// =============================================================================
+
+/// AI шинжилгээ — Асуулт/Хариулт/Нотолгоо → Finding/Evidence/Requirement/Conclusion
+model AiAnalysis {
+  id              String         @id @default(cuid())
+  auditId         String
+  audit           Audit          @relation(fields: [auditId], references: [id], onDelete: Cascade)
+  controlId       String?
+  control         Control?       @relation(fields: [controlId], references: [id])
+  nonconformityId String?
+  nonconformity   Nonconformity? @relation(fields: [nonconformityId], references: [id])
+  type            AiAnalysisType @default(FINDING_GENERATION)
+
+  // Оролт
+  inputQuestion String?
+  inputAnswer   String?
+  inputEvidence String?
+  inputContext  Json?
+
+  // Гаралт (AI-ийн үүсгэсэн)
+  generatedFinding     String?
+  generatedEvidence    String?
+  generatedRequirement String? // "ISO 27001:2022 Clause 6.1.2"
+  generatedConclusion  String? // "Major Nonconformity"
+  suggestedCategory    NcCategory?
+
+  rawResponse   Json?
+  modelProvider String? // "openai" / "local"
+  modelName     String? // "gpt-4o" / "llama3"
+  tokensUsed    Int?
+  createdById   String?
+  createdBy     User?    @relation(fields: [createdById], references: [id])
+  createdAt     DateTime @default(now())
+}
+
+// =============================================================================
+// REPORTS
+// =============================================================================
+
+/// Тайлангийн загвар (Админ удирдана)
+model ReportTemplate {
+  id          String       @id @default(cuid())
+  name        String
+  type        ReportType
+  format      ReportFormat @default(DOCX)
+  storageKey  String? // загвар файлын байршил (DOCX template)
+  description String?
+  isActive    Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  reports Report[]
+}
+
+/// Үүсгэсэн тайлан (Executive Summary, Detailed Findings, г.м.)
+model Report {
+  id            String          @id @default(cuid())
+  auditId       String
+  audit         Audit           @relation(fields: [auditId], references: [id], onDelete: Cascade)
+  templateId    String?
+  template      ReportTemplate? @relation(fields: [templateId], references: [id])
+  type          ReportType
+  format        ReportFormat    @default(PDF)
+  title         String?
+  status        ReportStatus    @default(DRAFT)
+  contentJson   Json? // бүтэцлэгдсэн агуулга (summary, findings)
+  storageKey    String? // үүсгэсэн файлын байршил
+  generatedById String?
+  generatedBy   User?           @relation(fields: [generatedById], references: [id])
+  generatedAt   DateTime?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+}
+
+// =============================================================================
+// SYSTEM AUDIT TRAIL
+// =============================================================================
+
+/// Системийн үйлдлийн мөрдөл (хэн, юу, хэзээ) — аудитын платформд зайлшгүй
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+  action     String // "CREATE" | "UPDATE" | "DELETE" | "LOGIN" ...
+  entityType String // "Audit" | "Nonconformity" ...
+  entityId   String?
+  metadata   Json?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([userId])
+}
