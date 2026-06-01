@@ -7,6 +7,8 @@ import { getAudit, updateAudit, type Audit } from '@/lib/api';
 import { AppShell } from '@/components/app-shell';
 import { ChecklistTab } from '@/components/checklist-tab';
 import { EvidenceTab } from '@/components/evidence-tab';
+import { NonconformityTab } from '@/components/nonconformity-tab';
+import { RiskTab } from '@/components/risk-tab';
 
 const STATUSES = [
   'DRAFT',
@@ -19,7 +21,7 @@ const STATUSES = [
   'CANCELLED',
 ];
 
-type Tab = 'info' | 'checklist' | 'evidence';
+type Tab = 'info' | 'checklist' | 'evidence' | 'nc' | 'risk';
 
 export default function AuditDetailPage() {
   const params = useParams();
@@ -54,6 +56,8 @@ export default function AuditDetailPage() {
     { key: 'info', label: 'Мэдээлэл' },
     { key: 'checklist', label: 'Чеклист' },
     { key: 'evidence', label: 'Нотлох баримт' },
+    { key: 'nc', label: 'Үл тохирол' },
+    { key: 'risk', label: 'Эрсдэл' },
   ];
 
   return (
@@ -108,6 +112,8 @@ export default function AuditDetailPage() {
             {tab === 'info' && <InfoTab audit={audit} />}
             {tab === 'checklist' && <ChecklistTab auditId={id} />}
             {tab === 'evidence' && <EvidenceTab auditId={id} />}
+            {tab === 'nc' && <NonconformityTab auditId={id} />}
+            {tab === 'risk' && <RiskTab auditId={id} />}
           </div>
         </>
       )}

@@ -201,10 +201,13 @@ export const upsertChecklistResponse = (
   controlId: string,
   data: { result?: ChecklistResultValue; comment?: string },
 ) =>
-  apiFetch<ChecklistResponse>(`/audits/${auditId}/checklist/${controlId}`, {
-    method: 'PUT',
-    body: JSON.stringify(data),
-  });
+  apiFetch<{ response: ChecklistResponse; nonconformity: Nonconformity | null }>(
+    `/audits/${auditId}/checklist/${controlId}`,
+    {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    },
+  );
 
 export const getEvidence = (auditId: string) =>
   apiFetch<Evidence[]>(`/audits/${auditId}/evidence`);
@@ -212,3 +215,115 @@ export const uploadEvidence = (auditId: string, formData: FormData) =>
   apiUpload<Evidence>(`/audits/${auditId}/evidence`, formData);
 export const getEvidenceDownloadUrl = (auditId: string, id: string) =>
   apiFetch<{ url: string; fileName: string }>(`/audits/${auditId}/evidence/${id}/download`);
+
+
+// ============================================================================
+// Phase 3 — Nonconformity / CAPA / Risk
+// ============================================================================
+
+export type NcCategoryValue = 'MAJOR' | 'MINOR' | 'OBSERVATION';
+export type NcStatusValue = 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'VERIFIED' | 'CLOSED';
+
+export interface Nonconformity {
+  id: string;
+  ncCode: string;
+  category: NcCategoryValue;
+  finding: string;
+  clause?: string | null;
+  evidenceSummary?: string | null;
+  impact?: string | null;
+  recommendation?: string | null;
+  status: NcStatusValue;
+  dueDate?: string | null;
+  control?: { clause: string; title: string } | null;
+  correctiveActions?: CorrectiveAction[];
+  _count?: { correctiveActions: number };
+}
+
+export type CapaStatusValue = 'OPEN' | 'IN_PROGRESS' | 'CLOSED' | 'VERIFIED';
+
+export interface CorrectiveAction {
+  id: string;
+  capaCode?: string | null;
+  action: string;
+  rootCause?: string | null;
+  ownerLabel?: string | null;
+  status: CapaStatusValue;
+  dueDate?: string | null;
+  verificationNote?: string | null;
+  owner?: { firstName: string; lastName: string } | null;
+}
+
+export type RiskFactorValue = 'VERY_LOW' | 'LOW' | 'MEDIUM' | 'HIGH' | 'VERY_HIGH';
+export type RiskLevelValueT = 'VERY_LOW' | 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+export type RiskStatusValue =
+  | 'IDENTIFIED'
+  | 'ASSESSED'
+  | 'TREATMENT_PLANNED'
+  | 'IN_TREATMENT'
+  | 'MITIGATED'
+  | 'ACCEPTED'
+  | 'CLOSED';
+
+export interface Risk {
+  id: string;
+  riskCode?: string | null;
+  title: string;
+  description?: string | null;
+  asset?: string | null;
+  threat?: string | null;
+  likelihood: RiskFactorValue;
+  impact: RiskFactorValue;
+  riskScore: number;
+  riskLevel: RiskLevelValueT;
+  treatment?: string | null;
+  treatmentPlan?: string | null;
+  status: RiskStatusValue;
+  owner?: { firstName: string; lastName: string } | null;
+}
+
+// Nonconformity
+export const getNonconformities = (auditId: string) =>
+  apiFetch<Nonconformity[]>(`/audits/${auditId}/nonconformities`);
+export const getNonconformity = (id: string) =>
+  apiFetch<Nonconformity>(`/nonconformities/${id}`);
+export const createNonconformity = (
+  auditId: string,
+  data: { category: NcCategoryValue; finding: string; clause?: string; impact?: string; recommendation?: string },
+) => apiFetch<Nonconformity>(`/audits/${auditId}/nonconformities`, { method: 'POST', body: JSON.stringify(data) });
+export const updateNonconformity = (id: string, data: Record<string, unknown>) =>
+  apiFetch<Nonconformity>(`/nonconformities/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
+export const deleteNonconformity = (id: string) =>
+  apiFetch<{ success: boolean }>(`/nonconformities/${id}`, { method: 'DELETE' });
+
+// CAPA
+export const getCapa = (ncId: string) =>
+  apiFetch<CorrectiveAction[]>(`/nonconformities/${ncId}/capa`);
+export const createCapa = (
+  ncId: string,
+  data: { action: string; rootCause?: string; ownerLabel?: string; dueDate?: string },
+) => apiFetch<CorrectiveAction>(`/nonconformities/${ncId}/capa`, { method: 'POST', body: JSON.stringify(data) });
+export const updateCapa = (id: string, data: Record<string, unknown>) =>
+  apiFetch<CorrectiveAction>(`/capa/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
+export const verifyCapa = (id: string, data: { verificationNote?: string }) =>
+  apiFetch<CorrectiveAction>(`/capa/${id}/verify`, { method: 'POST', body: JSON.stringify(data) });
+export const deleteCapa = (id: string) =>
+  apiFetch<{ success: boolean }>(`/capa/${id}`, { method: 'DELETE' });
+
+// Risk
+export const getRisks = (auditId: string) => apiFetch<Risk[]>(`/audits/${auditId}/risks`);
+export const createRisk = (
+  auditId: string,
+  data: {
+    title: string;
+    likelihood: RiskFactorValue;
+    impact: RiskFactorValue;
+    description?: string;
+    asset?: string;
+    threat?: string;
+  },
+) => apiFetch<Risk>(`/audits/${auditId}/risks`, { method: 'POST', body: JSON.stringify(data) });
+export const updateRisk = (id: string, data: Record<string, unknown>) =>
+  apiFetch<Risk>(`/risks/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
+export const deleteRisk = (id: string) =>
+  apiFetch<{ success: boolean }>(`/risks/${id}`, { method: 'DELETE' });
