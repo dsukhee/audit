@@ -1,0 +1,18 @@
+{
+  "name": "audit-platform",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ISO 27001 Audit Platform",
+  "scripts": {
+    "db:generate": "npm run generate --workspace=packages/database",
+    "db:migrate": "npm run migrate --workspace=packages/database",
+    "db:studio": "npm run studio --workspace=packages/database",
+    "db:push": "npm run push --workspace=packages/database"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
